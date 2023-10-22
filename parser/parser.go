@@ -1,21 +1,21 @@
-package rtfread
+package parser
 
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"strconv"
+
+	"github.com/kmpm/go-rtfread/internal"
+	"github.com/kmpm/go-rtfread/interpreter"
 )
 
 type stateParser func(ch byte) error
 
-type msg struct {
-	Type  string
-	Value string
-	Param string
-}
-
-type parser struct {
+type Parser struct {
 	parserState  stateParser
 	pos          int
 	text         *bytes.Buffer
@@ -23,52 +23,73 @@ type parser struct {
 	hexChar      string
 	keyWord      string
 	keyWordParam string
+	ipr          interpreter.Interpreter
+	done         chan struct{}
+	err          error
 }
 
-func parse(r *bufio.Reader) (*parser, error) {
-	p := &parser{
+func New(ipr interpreter.Interpreter) (*Parser, error) {
+	p := &Parser{
 		text: &bytes.Buffer{},
+		ipr:  ipr,
+		done: make(chan struct{}),
 	}
 	p.parserState = p.parseText
-
-	for {
-		ch, err := r.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-		p.pos++
-		if err := p.parserState(ch); err != nil {
-			return nil, err
-		}
-	}
 
 	return p, nil
 }
 
-func (p *parser) String() string {
-
-	return ""
+func (p *Parser) Done() <-chan struct{} {
+	return p.done
 }
 
-func (p *parser) writeByte(ch byte) error {
+func (p *Parser) Parse(ctx context.Context, r *bufio.Reader) error {
+
+	defer func() {
+		slog.Debug("done parsing")
+		close(p.done)
+	}()
+
+	for {
+		ch, err := r.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			p.err = err
+			return err
+		}
+		p.pos++
+		if err := p.parserState(ch); err != nil {
+			p.err = err
+			return err
+		}
+	}
+}
+
+func (p *Parser) writeByte(ch byte) error {
 	return p.text.WriteByte(ch)
 }
 
-func (p *parser) writeRune(r rune) error {
+func (p *Parser) writeRune(r rune) error {
 	_, err := p.text.WriteRune(r)
 	return err
 }
 
-func (p *parser) writeString(s string) error {
+func (p *Parser) writeString(s string) error {
 	_, err := p.text.WriteString(s)
 	return err
 }
 
-func (p *parser) push(m msg) {
-	slog.Info("push", "pos", p.pos, "group", p.groups, "type", m.Type, "value", m.Value, "param", m.Param)
+func (p *Parser) push(m interpreter.Message) {
+	// slog.Debug("push", "pos", p.pos, "group", p.groups, "type", m.Type, "value", m.Value, "param", m.Param)
+	err := p.ipr.Read(m)
+	if err != nil {
+		panic(err)
+	}
 }
 
-func (p *parser) parseText(ch byte) error {
+func (p *Parser) parseText(ch byte) error {
 	switch ch {
 	case '\r', '\n':
 		//noop
@@ -87,7 +108,7 @@ func (p *parser) parseText(ch byte) error {
 	return nil
 }
 
-func (p *parser) parseEscape(ch byte) error {
+func (p *Parser) parseEscape(ch byte) error {
 	if ch == '\\' || ch == '{' || ch == '}' {
 		p.writeByte(ch)
 		p.parserState = p.parseText
@@ -97,7 +118,7 @@ func (p *parser) parseEscape(ch byte) error {
 	return p.parseSymbol(ch)
 }
 
-func (p *parser) parseSymbol(ch byte) error {
+func (p *Parser) parseSymbol(ch byte) error {
 	switch ch {
 	case '*':
 		p.emitIgnorable()
@@ -127,9 +148,9 @@ func (p *parser) parseSymbol(ch byte) error {
 	return nil
 }
 
-func (p *parser) parseHex(ch byte) error {
+func (p *Parser) parseHex(ch byte) error {
 
-	if !ishex(ch) {
+	if !internal.IsHex(ch) {
 		p.parserState = p.parseText
 		return fmt.Errorf("invalid hex character: %c", ch)
 	}
@@ -142,15 +163,15 @@ func (p *parser) parseHex(ch byte) error {
 	return nil
 }
 
-func (p *parser) parseKeyword(ch byte) error {
+func (p *Parser) parseKeyword(ch byte) error {
 
 	if ch == ' ' {
 		p.emitKeyword()
 		p.parserState = p.parseText
-	} else if ch == '-' || isdigit(ch) {
+	} else if ch == '-' || internal.IsDigit(ch) {
 		p.parserState = p.parseKeywordParam
 		p.keyWordParam += string(ch)
-	} else if isalpha(ch) {
+	} else if internal.IsAlpha(ch) {
 		p.keyWord += string(ch)
 	} else {
 		p.emitKeyword()
@@ -161,8 +182,8 @@ func (p *parser) parseKeyword(ch byte) error {
 	return nil
 }
 
-func (p *parser) parseKeywordParam(ch byte) error {
-	if isdigit(ch) {
+func (p *Parser) parseKeywordParam(ch byte) error {
+	if internal.IsDigit(ch) {
 		p.keyWordParam += string(ch)
 	} else if ch == ' ' {
 		p.emitKeyword()
@@ -175,9 +196,9 @@ func (p *parser) parseKeywordParam(ch byte) error {
 	return nil
 }
 
-func (p *parser) emitText() {
+func (p *Parser) emitText() {
 	if p.text.Len() > 0 {
-		p.push(msg{
+		p.push(interpreter.Message{
 			Type:  "text",
 			Value: p.text.String(),
 		})
@@ -185,59 +206,71 @@ func (p *parser) emitText() {
 	}
 }
 
-func (p *parser) emitIgnorable() {
+func (p *Parser) emitIgnorable() {
 	p.emitText()
-	p.push(msg{Type: "ignorable"})
+	p.push(interpreter.Message{Type: "ignorable"})
 }
 
-func (p *parser) emitHexChar() {
+func (p *Parser) emitHexChar() {
 	p.emitText()
 	// v, err := strconv.ParseInt(p.hexChar, 16, 32)
 	// if err != nil {
 	// 	return err
 	// }
-	p.push(msg{Type: "hex-char", Value: p.hexChar})
+	p.push(interpreter.Message{Type: "hex-char", Value: p.hexChar})
 	p.hexChar = ""
 }
 
-func (p *parser) emitStartGroup() {
+func (p *Parser) emitStartGroup() {
 	p.emitText()
-	p.push(msg{Type: "group-start"})
+	p.push(interpreter.Message{Type: "group-start"})
 	p.groups++
 }
 
-func (p *parser) emitEndGroup() {
+func (p *Parser) emitEndGroup() {
 	p.emitText()
-	p.push(msg{Type: "group-end"})
+	p.push(interpreter.Message{Type: "group-end"})
 	p.groups--
 }
 
-func (p *parser) emitFormula() {
+func (p *Parser) emitFormula() {
 	panic("not implemented")
 }
 
-func (p *parser) emitIndexSubEntry() {
+func (p *Parser) emitIndexSubEntry() {
 	panic("not implemented")
 }
 
-func (p *parser) emitEndParagraph() {
+func (p *Parser) emitEndParagraph() {
 	p.emitText()
-	p.push(msg{Type: "paragraph-end"})
+	p.push(interpreter.Message{Type: "paragraph-end"})
 }
 
-func (p *parser) emitError(message string, err error) {
+func (p *Parser) emitError(message string, err error) {
+	p.err = err
 	p.emitText()
-	p.push(msg{Type: "error", Value: message})
+	p.push(interpreter.Message{Type: "error", Value: message})
 }
 
-func (p *parser) emitKeyword() {
+func (p *Parser) emitKeyword() {
 	p.emitText()
 	if p.keyWord == "" {
 		p.emitError("empty keyword", nil)
 		p.keyWordParam = ""
 		return
 	}
-	p.push(msg{"keyword", p.keyWord, p.keyWordParam})
+	var value int
+	if p.keyWordParam != "" {
+		var err error
+		value, err = strconv.Atoi(p.keyWordParam)
+		if err != nil {
+			p.emitError("invalid keyword param", err)
+			p.keyWordParam = ""
+			p.keyWord = ""
+			return
+		}
+	}
+	p.push(interpreter.Message{Type: "keyword", Value: p.keyWord, Param: value})
 	p.keyWord = ""
 	p.keyWordParam = ""
 }

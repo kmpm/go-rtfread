@@ -2,8 +2,12 @@ package rtfread
 
 import (
 	"bufio"
-	"io"
+	"context"
+	"log/slog"
 	"os"
+
+	"github.com/kmpm/go-rtfread/interpreter"
+	"github.com/kmpm/go-rtfread/parser"
 )
 
 func ParseFile(filename string) (string, error) {
@@ -16,9 +20,20 @@ func ParseFile(filename string) (string, error) {
 }
 
 func Parse(r *bufio.Reader) (string, error) {
-	p, err := parse(r)
-	if err != nil && err != io.EOF {
+	ipr, err := interpreter.New()
+	if err != nil {
 		return "", err
 	}
-	return p.String(), nil
+	p, err := parser.New(ipr)
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	slog.Info("parse")
+	go p.Parse(ctx, r)
+	slog.Info("wait for done")
+	<-p.Done()
+	return ipr.Value(), nil
 }

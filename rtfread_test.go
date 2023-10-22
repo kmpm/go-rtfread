@@ -1,9 +1,23 @@
 package rtfread
 
 import (
+	"log/slog"
 	"os"
 	"testing"
 )
+
+func init() {
+	opts := &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		// AddSource: true,
+	}
+	file, err := os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	logger := slog.New(slog.NewTextHandler(file, opts))
+	slog.SetDefault(logger)
+}
 
 func TestParseFile(t *testing.T) {
 	type args struct {
@@ -18,12 +32,12 @@ func TestParseFile(t *testing.T) {
 		want    want
 		wantErr bool
 	}{
-		// {"infotext", args{"../testdata/infotext.rtf"}, want{"../testdata/infotext.txt"}, false},
-		// {"infotext-2", args{"testdata/infotext-2.rtf"}, want{"testdata/infotext-2.txt"}, false},
+		// {"infotext", args{"./testdata/infotext.rtf"}, want{"./testdata/infotext.txt"}, false},
+		{"infotext-2", args{"testdata/infotext-2.rtf"}, want{"testdata/infotext-2.txt"}, false},
 		// {"ad", args{"testdata/ad.rtf"}, want{"testdata/ad.txt"}, false},
 		// {"np.new", args{"testdata/np.new.rtf"}, want{"testdata/np.new.txt"}, false},
-		{"sample", args{"./testdata/sample.rtf"}, want{"../testdata/sample.txt"}, false},
-		// {"file-sample_100kB", args{"testdata/file-sample_100kB.rtf"}, want{"testdata/file-sample_100kB.txt"}, false},
+		// {"sample", args{"./testdata/sample.rtf"}, want{"./testdata/sample.txt"}, false},
+		// {"file-sample_100kB", args{"./testdata/file-sample_100kB.rtf"}, want{"./testdata/file-sample_100kB.txt"}, false},
 		// TODO: Add more test cases.
 	}
 	for _, tt := range tests {
