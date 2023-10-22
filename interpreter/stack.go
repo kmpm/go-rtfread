@@ -10,6 +10,7 @@ type element struct {
 	text         string
 	keyword      string
 	ignoreOutput bool
+	handler      stateHandler
 	next         *element
 }
 
@@ -19,6 +20,7 @@ type stack struct {
 	text    string
 	keyword string
 	count   int
+	handler stateHandler
 }
 
 func newStack() *stack {
@@ -65,14 +67,34 @@ func (s *stack) getKeyword() string {
 	return s.keyword
 }
 
+func (s *stack) setHandler(h stateHandler) {
+	if s.top != nil {
+		s.top.handler = h
+		return
+	}
+	s.handler = h
+}
+
+func (s *stack) getHandler() stateHandler {
+	if s.top != nil {
+		return s.top.handler
+	}
+	return s.handler
+}
+
+func (s *stack) handle(msg Message) error {
+	return s.getHandler()(msg)
+}
+
 func (s *stack) push() error {
 	e := &element{
 		params: make(map[string]int),
 	}
-	if s.top != nil {
-		e.params = s.top.params
-	}
+	// if s.top != nil {
+	// 	e.params = s.top.params
+	// }
 	e.next = s.top
+	e.handler = s.getHandler()
 	s.top = e
 	s.count++
 	return nil

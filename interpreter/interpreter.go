@@ -19,8 +19,7 @@ type stateHandler func(msg Message) error
 
 type interpreter struct {
 	group int
-	state stateHandler
-	text  string
+
 	stack *stack
 }
 
@@ -28,7 +27,7 @@ func New() (Interpreter, error) {
 	ipr := &interpreter{
 		stack: newStack(),
 	}
-	ipr.state = ipr.handle
+	ipr.stack.setHandler(ipr.handle)
 	return ipr, nil
 }
 
@@ -55,12 +54,9 @@ func (ipr *interpreter) Read(msg Message) error {
 	case "text":
 		ipr.stack.addString(msg.Value)
 	case "keyword":
-		ipr.stack.set(msg.Value, msg.Param)
-		switch msg.Value {
-		case "par":
-			ipr.stack.addString("\n")
-		case "fcharset", "f":
-			// ipr.stack.top.ignoreOutput = true
+		err := ipr.stack.handle(msg)
+		if err != nil {
+			return err
 		}
 	default:
 		slog.Debug("read", "group", ipr.group, "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
@@ -70,7 +66,18 @@ func (ipr *interpreter) Read(msg Message) error {
 }
 
 func (ipr *interpreter) handle(msg Message) error {
+	ipr.stack.set(msg.Value, msg.Param)
+	switch msg.Value {
+	case "par":
+		ipr.stack.addString("\n")
+	case "fonttbl":
+		ipr.stack.setHandler(ipr.handleFontTable)
+	}
+	return nil
+}
 
+func (ipr *interpreter) handleFontTable(msg Message) error {
+	slog.Debug("handleFontTable", "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
 	return nil
 }
 
