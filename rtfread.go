@@ -5,10 +5,13 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/kmpm/go-rtfread/interpreter"
 	"github.com/kmpm/go-rtfread/parser"
 )
+
+var debug bool = strings.Contains(os.Getenv("DEBUG"), "rtfread")
 
 func ParseFile(filename string) (string, error) {
 	fp, err := os.Open(filename)
@@ -31,9 +34,13 @@ func Parse(r *bufio.Reader) (string, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	slog.Info("parse")
+	if debug {
+		slog.Info("parse")
+	}
 	go p.Parse(ctx, r)
-	slog.Info("wait for done")
+	if debug {
+		slog.Info("wait for done")
+	}
 	<-p.Done()
 	return ipr.Value(), nil
 }

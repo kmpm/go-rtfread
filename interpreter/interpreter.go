@@ -3,8 +3,12 @@ package interpreter
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
+	"strings"
 )
+
+var debug bool = strings.Contains(os.Getenv("DEBUG"), "rtfread")
 
 type Interpreter interface {
 	Read(msg Message) error
@@ -36,7 +40,9 @@ func (ipr *interpreter) Value() string {
 }
 
 func (ipr *interpreter) Read(msg Message) error {
-	slog.Debug("read", "msg_type", msg.Type, "msg_value", msg.Value, "msg_param", msg.Param)
+	if debug {
+		slog.Debug("read", "msg_type", msg.Type, "msg_value", msg.Value, "msg_param", msg.Param)
+	}
 	switch msg.Type {
 	case "group-start":
 		ipr.group++
@@ -62,7 +68,9 @@ func (ipr *interpreter) Read(msg Message) error {
 			return err
 		}
 	default:
-		slog.Warn("read", "group", ipr.group, "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
+		if debug {
+			slog.Warn("read", "group", ipr.group, "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
+		}
 	}
 
 	return nil
@@ -71,7 +79,9 @@ func (ipr *interpreter) Read(msg Message) error {
 func (ipr *interpreter) handle(msg Message) error {
 	kw, ok := keywords[msg.Value]
 	if !ok {
-		slog.Warn("ipr.handle", "keyword", msg.Value, "not_found", true, "stack", ipr.stack.size())
+		if debug {
+			slog.Warn("ipr.handle", "keyword", msg.Value, "not_found", true, "stack", ipr.stack.size())
+		}
 		return nil
 	}
 	switch kw.kwd {
@@ -97,7 +107,9 @@ func (ipr *interpreter) handle(msg Message) error {
 }
 
 func (ipr *interpreter) setDestination(d dest) {
-	slog.Debug("setDestination", "d", d, "stack", ipr.stack.size())
+	if debug {
+		slog.Debug("setDestination", "d", d, "stack", ipr.stack.size())
+	}
 	ipr.stack.current().destination = d
 }
 
@@ -109,7 +121,7 @@ func (ipr *interpreter) handleSpecial(msg Message, idx ipfn) error {
 		if msg.Param < 0 {
 			msg.Param += 65536
 		}
-		ipr.stack.addRune(msg.Param)
+		return ipr.stack.addRune(msg.Param)
 	default:
 		return fmt.Errorf("special function not implemented %v", idx)
 	}

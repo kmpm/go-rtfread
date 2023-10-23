@@ -18,9 +18,8 @@ type element struct {
 type stack struct {
 	top *element
 
-	text    string
-	keyword string
-	count   int
+	text  string
+	count int
 }
 
 func newStack() *stack {
@@ -52,17 +51,23 @@ func (s *stack) addString(v string) (err error) {
 		// 		return err
 		// 	}
 		// }
-		slog.Debug("stack.addstring", "text", v, "codepage", cpg)
+		if debug {
+			slog.Debug("stack.addstring", "text", v, "codepage", cpg)
+		}
 		s.current().text += v
 	default:
-		slog.Debug("stack.addString.ignoring", "text", v)
+		if debug {
+			slog.Debug("stack.addString.ignoring", "text", v)
+		}
 	}
 
 	return nil
 }
 
 func (s *stack) addRune(v int) error {
-	slog.Debug("stack.addRune", "rune", v)
+	if debug {
+		slog.Debug("stack.addRune", "rune", v)
+	}
 	var str string
 	switch v {
 	case 0xf0b7:
@@ -112,7 +117,9 @@ func (s *stack) push() error {
 
 	s.top = e
 	s.count++
-	slog.Debug("push", "count", s.count)
+	if debug {
+		slog.Debug("push", "count", s.count)
+	}
 	return nil
 }
 
@@ -121,7 +128,9 @@ func (s *stack) pop() (*element, error) {
 		return nil, errors.New("stack is empty")
 	}
 	e := s.top
-	slog.Debug("stack.pop", "count", s.count, "kw", s.getKeyword(), "ignore", e.ignoreOutput, "params", e.params, "text", e.text)
+	if debug {
+		slog.Debug("stack.pop", "count", s.count, "kw", s.getKeyword(), "ignore", e.ignoreOutput, "params", e.params, "text", e.text)
+	}
 	s.text += e.getText()
 	// slog.Debug("stack", "text", s.text)
 	s.top = e.next

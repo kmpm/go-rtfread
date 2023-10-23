@@ -7,11 +7,15 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/kmpm/go-rtfread/internal"
 	"github.com/kmpm/go-rtfread/interpreter"
 )
+
+var debug bool = strings.Contains(os.Getenv("DEBUG"), "rtfread")
 
 type stateParser func(ch byte) error
 
@@ -47,7 +51,9 @@ func (p *Parser) Done() <-chan struct{} {
 func (p *Parser) Parse(ctx context.Context, r *bufio.Reader) error {
 
 	defer func() {
-		slog.Debug("done parsing")
+		if debug {
+			slog.Debug("done parsing")
+		}
 		close(p.done)
 	}()
 
@@ -72,10 +78,10 @@ func (p *Parser) writeByte(ch byte) error {
 	return p.text.WriteByte(ch)
 }
 
-func (p *Parser) writeRune(r rune) error {
-	_, err := p.text.WriteRune(r)
-	return err
-}
+// func (p *Parser) writeRune(r rune) error {
+// 	_, err := p.text.WriteRune(r)
+// 	return err
+// }
 
 func (p *Parser) writeString(s string) error {
 	_, err := p.text.WriteString(s)
