@@ -42,9 +42,10 @@ func (s *stack) current() *element {
 func (s *stack) addString(v string) error {
 	switch s.current().destination {
 	case destNormal:
+		slog.Debug("stack.addstring", "text", v)
 		s.current().text += v
 	default:
-		slog.Debug("stack.addString ignoring", "text", v)
+		slog.Debug("stack.addString.ignoring", "text", v)
 	}
 
 	return nil
@@ -84,6 +85,7 @@ func (s *stack) push() error {
 	e.next = s.top
 	// e.handler = s.getHandler()
 	e.destination = s.top.destination
+
 	s.top = e
 	s.count++
 	slog.Debug("push", "count", s.count)

@@ -32,12 +32,13 @@ func TestParseFile(t *testing.T) {
 		want    want
 		wantErr bool
 	}{
-		// {"infotext", args{"./testdata/infotext.rtf"}, want{"./testdata/infotext.txt"}, false},
+		{"infotext", args{"./testdata/infotext.rtf"}, want{"./testdata/infotext.txt"}, false},
 		{"infotext-2", args{"testdata/infotext-2.rtf"}, want{"testdata/infotext-2.txt"}, false},
-		// {"ad", args{"testdata/ad.rtf"}, want{"testdata/ad.txt"}, false},
-		// {"np.new", args{"testdata/np.new.rtf"}, want{"testdata/np.new.txt"}, false},
-		// {"sample", args{"./testdata/sample.rtf"}, want{"./testdata/sample.txt"}, false},
+		{"ad", args{"testdata/ad.rtf"}, want{"testdata/ad.txt"}, false},
+		{"np.new", args{"testdata/np.new.rtf"}, want{"testdata/np.new.txt"}, false},
+		// failing likeness tests
 		// {"file-sample_100kB", args{"./testdata/file-sample_100kB.rtf"}, want{"./testdata/file-sample_100kB.txt"}, false},
+		// {"sample", args{"./testdata/sample.rtf"}, want{"./testdata/sample.txt"}, false},
 		// TODO: Add more test cases.
 	}
 	for _, tt := range tests {
@@ -54,6 +55,10 @@ func TestParseFile(t *testing.T) {
 			want := string(data)
 
 			if got != want {
+				err = os.WriteFile(tt.name+".got.txt", []byte(got), 0666)
+				if err != nil {
+					t.Errorf("write want error = %v", err)
+				}
 				t.Errorf("\nToString() = %#v,\n      want = %#v", got, want)
 			}
 		})

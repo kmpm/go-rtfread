@@ -1,6 +1,7 @@
 package interpreter
 
 import (
+	"fmt"
 	"log/slog"
 	"strconv"
 )
@@ -61,38 +62,53 @@ func (ipr *interpreter) Read(msg Message) error {
 			return err
 		}
 	default:
-		slog.Debug("read", "group", ipr.group, "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
+		slog.Warn("read", "group", ipr.group, "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
 	}
 
 	return nil
 }
 
 func (ipr *interpreter) handle(msg Message) error {
-	slog.Debug("ipr.handle")
-	ipr.stack.set(msg.Value, msg.Param)
-	switch msg.Value {
-	case "par":
-		ipr.stack.addString("\n")
-	case "fonttbl", "colortbl", "stylesheet":
-		ipr.stack.current().destination = 1
+	kw, ok := keywords[msg.Value]
+	if !ok {
+		slog.Warn("ipr.handle", "keyword", msg.Value, "not_found", true, "stack", ipr.stack.size())
+		return nil
 	}
+	switch kw.kwd {
+	case kwdProp:
+		ipr.stack.set(msg.Value, msg.Param)
+	case kwdDest:
+		ipr.setDestination(dest(kw.idx))
+	case kwdChar:
+		ipr.stack.addString(string(rune(kw.idx)))
+	case kwdSpec:
+		return ipr.handleSpecial(msg, ipfn(kw.idx))
+	}
+	// switch msg.Value {
+	// case "par":
+	// 	ipr.stack.addString("\n")
+	// case "u":
+	// 	ipr.stack.addString(string(rune(msg.Param)))
+	// case "fonttbl", "colortbl", "stylesheet", "expandedcolortbl", "panose", "xmlnstbl", "operator":
+	// 	ipr.stack.current().destination = 1
+	// }
 
 	return nil
 }
 
-type dest int
-
-const (
-	destNormal dest = iota
-	destSkip
-)
-
-type keyword struct {
-	destination dest
+func (ipr *interpreter) setDestination(d dest) {
+	slog.Debug("setDestination", "d", d, "stack", ipr.stack.size())
+	ipr.stack.current().destination = d
 }
 
-var keywords = map[string]keyword{
-	"fonttbl":  {destSkip},
-	"colortbl": {destSkip},
-	"ltrpar":   {destSkip},
+func (ipr *interpreter) handleSpecial(msg Message, idx ipfn) error {
+	switch idx {
+	case ipfnBin:
+		slog.Debug("ipfnBin", "binary", msg.Value)
+	case ipfnUnicode:
+		ipr.stack.addString(string(rune(msg.Param)))
+	default:
+		return fmt.Errorf("special function not implemented %v", idx)
+	}
+	return nil
 }

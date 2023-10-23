@@ -1,8 +1,12 @@
 root = true
 
 [*]
-end_of_line = crlf
+trim_trailing_whitespace = false
+insert_final_newline = false
 
+[*.{txt}]
+end_of_line = crlf
+indent_style = tab
 
 
 [*.{go}]
