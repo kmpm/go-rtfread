@@ -21,6 +21,7 @@ type Parser struct {
 	text         *bytes.Buffer
 	groups       int
 	hexChar      string
+	unicodeChar  string
 	keyWord      string
 	keyWordParam string
 	ipr          interpreter.Interpreter
@@ -138,6 +139,8 @@ func (p *Parser) parseSymbol(ch byte) error {
 		p.writeString("-")
 	case '\'':
 		p.parserState = p.parseHex
+	// case 'u':
+	// 	p.parserState = p.parseUnicode
 	case '\r', '\n':
 		p.emitEndParagraph()
 		p.parserState = p.parseText
@@ -149,22 +152,28 @@ func (p *Parser) parseSymbol(ch byte) error {
 }
 
 func (p *Parser) parseHex(ch byte) error {
-
 	if !internal.IsHex(ch) {
 		p.parserState = p.parseText
 		return fmt.Errorf("invalid hex character: %c", ch)
 	}
 	p.hexChar += string(ch)
 	if len(p.hexChar) >= 2 {
-
 		p.emitHexChar()
 		p.parserState = p.parseText
 	}
 	return nil
 }
 
-func (p *Parser) parseKeyword(ch byte) error {
+// func (p *Parser) parseUnicode(ch byte) error {
+// 	if internal.IsDigit(ch) {
+// 		p.unicodeChar += string(ch)
+// 	} else {
+// 		p.emitUnicode()
+// 		p.parserState = p.parseText
+// 	}
+// }
 
+func (p *Parser) parseKeyword(ch byte) error {
 	if ch == ' ' {
 		p.emitKeyword()
 		p.parserState = p.parseText
@@ -185,7 +194,7 @@ func (p *Parser) parseKeyword(ch byte) error {
 func (p *Parser) parseKeywordParam(ch byte) error {
 	if internal.IsDigit(ch) {
 		p.keyWordParam += string(ch)
-	} else if ch == ' ' {
+	} else if ch == ' ' || ch == '?' {
 		p.emitKeyword()
 		p.parserState = p.parseText
 	} else {
@@ -220,6 +229,12 @@ func (p *Parser) emitHexChar() {
 	p.push(interpreter.Message{Type: "hex-char", Value: p.hexChar})
 	p.hexChar = ""
 }
+
+// func (p *Parser) emitUnicode() {
+// 	p.emitText()
+// 	p.push(interpreter.Message{Type: "unicode", Value: p.unicodeChar})
+// 	p.unicodeChar = ""
+// }
 
 func (p *Parser) emitStartGroup() {
 	p.emitText()

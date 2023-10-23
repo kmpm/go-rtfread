@@ -19,7 +19,6 @@ type stateHandler func(msg Message) error
 
 type interpreter struct {
 	group int
-
 	stack *stack
 }
 
@@ -27,7 +26,7 @@ func New() (Interpreter, error) {
 	ipr := &interpreter{
 		stack: newStack(),
 	}
-	ipr.stack.setHandler(ipr.handle)
+	// ipr.stack.setHandler(ipr.handle)
 	return ipr, nil
 }
 
@@ -36,6 +35,7 @@ func (ipr *interpreter) Value() string {
 }
 
 func (ipr *interpreter) Read(msg Message) error {
+	slog.Debug("read", "msg_type", msg.Type, "msg_value", msg.Value, "msg_param", msg.Param)
 	switch msg.Type {
 	case "group-start":
 		ipr.group++
@@ -53,8 +53,10 @@ func (ipr *interpreter) Read(msg Message) error {
 		}
 	case "text":
 		ipr.stack.addString(msg.Value)
+		// ipr.stack.current().destination = destNormal
+
 	case "keyword":
-		err := ipr.stack.handle(msg)
+		err := ipr.handle(msg)
 		if err != nil {
 			return err
 		}
@@ -66,27 +68,31 @@ func (ipr *interpreter) Read(msg Message) error {
 }
 
 func (ipr *interpreter) handle(msg Message) error {
+	slog.Debug("ipr.handle")
 	ipr.stack.set(msg.Value, msg.Param)
 	switch msg.Value {
 	case "par":
 		ipr.stack.addString("\n")
-	case "fonttbl":
-		ipr.stack.setHandler(ipr.handleFontTable)
+	case "fonttbl", "colortbl", "stylesheet":
+		ipr.stack.current().destination = 1
 	}
+
 	return nil
 }
 
-func (ipr *interpreter) handleFontTable(msg Message) error {
-	slog.Debug("handleFontTable", "stack", ipr.stack.size(), "type", msg.Type, "value", msg.Value, "param", msg.Param)
-	return nil
-}
+type dest int
+
+const (
+	destNormal dest = iota
+	destSkip
+)
 
 type keyword struct {
-	wantText bool
+	destination dest
 }
 
 var keywords = map[string]keyword{
-	"rtf":       keyword{wantText: false},
-	"fccharset": keyword{wantText: false},
-	"par":       keyword{wantText: false},
+	"fonttbl":  {destSkip},
+	"colortbl": {destSkip},
+	"ltrpar":   {destSkip},
 }

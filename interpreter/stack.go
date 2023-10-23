@@ -10,22 +10,24 @@ type element struct {
 	text         string
 	keyword      string
 	ignoreOutput bool
-	handler      stateHandler
-	next         *element
+	// handler      stateHandler
+	next        *element
+	destination dest
 }
 
 type stack struct {
-	top     *element
-	params  map[string]int
+	top *element
+
 	text    string
 	keyword string
 	count   int
-	handler stateHandler
 }
 
 func newStack() *stack {
 	return &stack{
-		params: make(map[string]int),
+		top: &element{
+			params: make(map[string]int),
+		},
 	}
 }
 
@@ -33,58 +35,44 @@ func (s *stack) size() int {
 	return s.count
 }
 
+func (s *stack) current() *element {
+	return s.top
+}
+
 func (s *stack) addString(v string) error {
-	if s.top != nil {
-		s.top.text += v
-		return nil
+	switch s.current().destination {
+	case destNormal:
+		s.current().text += v
+	default:
+		slog.Debug("stack.addString ignoring", "text", v)
 	}
-	s.text += v
+
 	return nil
 }
 func (s *stack) set(p string, v int) error {
-	s.setKeyword(p)
-	if s.top != nil {
-		s.top.params[p] = v
-		return nil
-	}
-	s.params[p] = v
-	return nil
-}
-
-func (s *stack) setKeyword(v string) error {
-	if s.top != nil {
-		s.top.keyword = v
-		return nil
-	}
-	s.keyword = v
+	s.current().keyword = p
+	s.current().params[p] = v
 	return nil
 }
 
 func (s *stack) getKeyword() string {
-	if s.top != nil {
-		return s.top.keyword
-	}
-	return s.keyword
+	return s.current().keyword
 }
 
-func (s *stack) setHandler(h stateHandler) {
-	if s.top != nil {
-		s.top.handler = h
-		return
-	}
-	s.handler = h
-}
+// func (s *stack) setHandler(h stateHandler) {
+// 	slog.Debug("setHandler", "h", h)
+// 	s.current().handler = h
+// }
 
-func (s *stack) getHandler() stateHandler {
-	if s.top != nil {
-		return s.top.handler
-	}
-	return s.handler
-}
+// func (s *stack) getHandler() stateHandler {
+// 	return s.current().handler
+// }
 
-func (s *stack) handle(msg Message) error {
-	return s.getHandler()(msg)
-}
+// func (s *stack) handle(msg Message) error {
+// 	h := s.getHandler()
+// 	slog.Debug("handle", "h", h)
+// 	return h(msg)
+// }
 
 func (s *stack) push() error {
 	e := &element{
@@ -94,9 +82,11 @@ func (s *stack) push() error {
 	// 	e.params = s.top.params
 	// }
 	e.next = s.top
-	e.handler = s.getHandler()
+	// e.handler = s.getHandler()
+	e.destination = s.top.destination
 	s.top = e
 	s.count++
+	slog.Debug("push", "count", s.count)
 	return nil
 }
 
@@ -105,9 +95,9 @@ func (s *stack) pop() (*element, error) {
 		return nil, errors.New("stack is empty")
 	}
 	e := s.top
-	slog.Debug("pop", "count", s.count, "kw", s.getKeyword(), "ignore", e.ignoreOutput, "params", e.params, "text", e.text)
+	slog.Debug("stack.pop", "count", s.count, "kw", s.getKeyword(), "ignore", e.ignoreOutput, "params", e.params, "text", e.text)
 	s.text += e.getText()
-	slog.Debug("stack", "text", s.text)
+	// slog.Debug("stack", "text", s.text)
 	s.top = e.next
 	s.count--
 	return e, nil
