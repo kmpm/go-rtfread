@@ -60,6 +60,7 @@ type keyword struct {
 }
 
 var keywords = map[string]keyword{
+	"ansicpg":            {kwdProp, 0},
 	"author":             {kwdDest, int(destSkip)},
 	"colorschememapping": {kwdDest, int(destSkip)},
 	"colortbl":           {kwdDest, int(destSkip)},

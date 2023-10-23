@@ -39,10 +39,20 @@ func (s *stack) current() *element {
 	return s.top
 }
 
-func (s *stack) addString(v string) error {
+func (s *stack) addString(v string) (err error) {
 	switch s.current().destination {
 	case destNormal:
-		slog.Debug("stack.addstring", "text", v)
+		cpg := s.codepage()
+		// switch cpg {
+		// case 1252:
+		// 	x := charmap.Windows1252.NewDecoder()
+		// 	v, err = x.String(v)
+		// 	if err != nil {
+		// 		slog.Error("stack.addstring", "error", err)
+		// 		return err
+		// 	}
+		// }
+		slog.Debug("stack.addstring", "text", v, "codepage", cpg)
 		s.current().text += v
 	default:
 		slog.Debug("stack.addString.ignoring", "text", v)
@@ -50,6 +60,20 @@ func (s *stack) addString(v string) error {
 
 	return nil
 }
+
+func (s *stack) addRune(v int) error {
+	slog.Debug("stack.addRune", "rune", v)
+	var str string
+	switch v {
+	case 0xf0b7:
+		v = '*' // bullet
+		str = "* "
+	default:
+		str = string(rune(v))
+	}
+	return s.addString(str)
+}
+
 func (s *stack) set(p string, v int) error {
 	s.current().keyword = p
 	s.current().params[p] = v
@@ -110,4 +134,18 @@ func (e *element) getText() string {
 		return ""
 	}
 	return e.text
+}
+
+func (s *stack) codepage() int {
+	var ok bool
+	var cpg int
+	here := s.current()
+	for here != nil {
+		if cpg, ok = here.params["ansicpg"]; ok {
+			break
+		}
+		here = here.next
+	}
+
+	return cpg
 }

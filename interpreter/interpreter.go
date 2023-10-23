@@ -50,7 +50,7 @@ func (ipr *interpreter) Read(msg Message) error {
 			if err != nil {
 				return err
 			}
-			ipr.stack.addString(string(rune(v)))
+			ipr.stack.addRune(int(v))
 		}
 	case "text":
 		ipr.stack.addString(msg.Value)
@@ -80,7 +80,7 @@ func (ipr *interpreter) handle(msg Message) error {
 	case kwdDest:
 		ipr.setDestination(dest(kw.idx))
 	case kwdChar:
-		ipr.stack.addString(string(rune(kw.idx)))
+		ipr.stack.addRune(kw.idx)
 	case kwdSpec:
 		return ipr.handleSpecial(msg, ipfn(kw.idx))
 	}
@@ -106,7 +106,10 @@ func (ipr *interpreter) handleSpecial(msg Message, idx ipfn) error {
 	case ipfnBin:
 		slog.Debug("ipfnBin", "binary", msg.Value)
 	case ipfnUnicode:
-		ipr.stack.addString(string(rune(msg.Param)))
+		if msg.Param < 0 {
+			msg.Param += 65536
+		}
+		ipr.stack.addRune(msg.Param)
 	default:
 		return fmt.Errorf("special function not implemented %v", idx)
 	}
